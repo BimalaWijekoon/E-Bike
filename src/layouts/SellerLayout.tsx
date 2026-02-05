@@ -75,10 +75,20 @@ export default function SellerLayout() {
     setAnchorEl(null);
   };
 
-  const handleLogout = () => {
-    dispatch(logout());
-    navigate('/login');
-    handleMenuClose();
+  const handleLogout = async () => {
+    try {
+      const { signOut } = await import('firebase/auth');
+      const { auth } = await import('../services/firebase/config');
+      await signOut(auth);
+      dispatch(logout());
+      // Clear all local storage
+      localStorage.clear();
+      sessionStorage.clear();
+      navigate('/login');
+      handleMenuClose();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const handleNavClick = (path: string) => {
@@ -149,6 +159,32 @@ export default function SellerLayout() {
           );
         })}
       </List>
+
+      <Divider />
+
+      {/* Logout Button */}
+      <Box sx={{ px: 2, pb: 2 }}>
+        <ListItemButton
+          onClick={handleLogout}
+          sx={{
+            borderRadius: 2,
+            color: 'error.main',
+            '&:hover': {
+              bgcolor: 'error.main',
+              color: 'error.contrastText',
+            },
+            py: 1.5,
+          }}
+        >
+          <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
+            <LogoutIcon />
+          </ListItemIcon>
+          <ListItemText
+            primary="Logout"
+            primaryTypographyProps={{ fontWeight: 600, fontSize: 14 }}
+          />
+        </ListItemButton>
+      </Box>
 
       <Divider />
 

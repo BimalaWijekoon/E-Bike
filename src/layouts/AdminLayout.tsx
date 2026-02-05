@@ -79,6 +79,9 @@ const AdminLayout: React.FC = () => {
     try {
       await signOut(auth);
       dispatch(logout());
+      // Clear all local storage
+      localStorage.clear();
+      sessionStorage.clear();
       navigate('/login');
     } catch (error) {
       console.error('Logout error:', error);
@@ -140,6 +143,32 @@ const AdminLayout: React.FC = () => {
           );
         })}
       </List>
+
+      <Divider />
+
+      {/* Logout Button */}
+      <Box sx={{ px: 2, py: 2 }}>
+        <ListItemButton
+          onClick={handleLogout}
+          sx={{
+            borderRadius: 2,
+            color: 'error.main',
+            '&:hover': {
+              bgcolor: 'error.main',
+              color: 'error.contrastText',
+            },
+            py: 1.5,
+          }}
+        >
+          <ListItemIcon sx={{ color: 'inherit', minWidth: 40 }}>
+            <Logout />
+          </ListItemIcon>
+          <ListItemText
+            primary="Logout"
+            primaryTypographyProps={{ fontWeight: 600, fontSize: 14 }}
+          />
+        </ListItemButton>
+      </Box>
 
       <Divider />
 
