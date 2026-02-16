@@ -123,12 +123,24 @@ const SellerSignupPage: React.FC = () => {
             <Typography variant="h5" fontWeight={600} gutterBottom>
               Registration Successful!
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-              Your account has been created and is pending approval.
-              You will be able to login once an administrator approves your account.
+            <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+              Your account has been created and is <strong>pending approval</strong>.
             </Typography>
+            <Alert severity="info" sx={{ mb: 3, textAlign: 'left' }}>
+              <Typography variant="body2" fontWeight={600} gutterBottom>
+                What's Next?
+              </Typography>
+              <Typography variant="body2">
+                • An administrator will review your application<br />
+                • You will receive approval notification via email<br />
+                • Once approved, you can login with your credentials<br />
+                • This typically takes 1-2 business days
+              </Typography>
+            </Alert>
             <Button
               variant="contained"
+              fullWidth
+              size="large"
               onClick={() => navigate('/login')}
               startIcon={<ArrowBack />}
             >

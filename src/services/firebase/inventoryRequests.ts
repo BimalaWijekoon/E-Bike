@@ -13,6 +13,8 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
+import { addToShopInventory } from './shopInventory';
+import { getBikeById } from './bikes';
 
 // Inventory Request interface
 export interface InventoryRequest {
@@ -152,7 +154,7 @@ export const createInventoryRequest = async (data: CreateRequestData): Promise<s
   }
 };
 
-// Approve request
+// Approve request and add bikes to seller's inventory
 export const approveRequest = async (
   id: string, 
   approvedQuantity: number, 
@@ -160,9 +162,30 @@ export const approveRequest = async (
   processedBy?: string
 ): Promise<void> => {
   try {
+    // Get the request details
+    const request = await getRequestById(id);
+    if (!request) {
+      throw new Error('Request not found');
+    }
+
+    // Get the bike details
+    const bike = await getBikeById(request.bikeId);
+    if (!bike) {
+      throw new Error('Bike not found');
+    }
+
+    // Add bikes to seller's shop inventory
+    await addToShopInventory(
+      request.sellerId,
+      request.bikeId,
+      bike,
+      approvedQuantity
+    );
+
+    // Update request status to fulfilled (since we're adding inventory immediately)
     const requestRef = doc(db, COLLECTION_NAME, id);
     await updateDoc(requestRef, {
-      status: 'approved',
+      status: 'fulfilled',
       approvedQuantity,
       adminNotes,
       processedBy,
@@ -206,6 +229,49 @@ export const fulfillRequest = async (id: string): Promise<void> => {
     });
   } catch (error) {
     console.error('Error fulfilling request:', error);
+    throw error;
+  }
+};
+
+// Process approved request to add bikes to inventory (for migrating old approved requests)
+export const processApprovedRequest = async (id: string): Promise<void> => {
+  try {
+    // Get the request details
+    const request = await getRequestById(id);
+    if (!request) {
+      throw new Error('Request not found');
+    }
+
+    if (request.status !== 'approved') {
+      throw new Error('Request is not in approved status');
+    }
+
+    if (!request.approvedQuantity) {
+      throw new Error('No approved quantity found');
+    }
+
+    // Get the bike details
+    const bike = await getBikeById(request.bikeId);
+    if (!bike) {
+      throw new Error('Bike not found');
+    }
+
+    // Add bikes to seller's shop inventory
+    await addToShopInventory(
+      request.sellerId,
+      request.bikeId,
+      bike,
+      request.approvedQuantity
+    );
+
+    // Update request status to fulfilled
+    const requestRef = doc(db, COLLECTION_NAME, id);
+    await updateDoc(requestRef, {
+      status: 'fulfilled',
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error('Error processing approved request:', error);
     throw error;
   }
 };

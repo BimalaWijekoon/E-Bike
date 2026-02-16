@@ -65,15 +65,33 @@ const LoginPage: React.FC = () => {
 
         // Check if seller account is pending approval
         if (userData.role === 'seller' && userData.status === 'pending') {
-          setLocalError('Your account is pending approval. Please wait for admin to approve your account.');
+          setLocalError(
+            'Your account is pending approval. Please wait for an administrator to approve your account. You will receive an email notification once approved.'
+          );
           await auth.signOut();
           setLoading(false);
           return;
         }
 
-        // Check if account is inactive/rejected
-        if (userData.status === 'inactive' || userData.status === 'rejected') {
-          setLocalError('Your account has been deactivated. Please contact administrator.');
+        // Check if account is rejected
+        if (userData.status === 'rejected') {
+          setLocalError('Your account application was rejected. Please contact administrator for more information.');
+          await auth.signOut();
+          setLoading(false);
+          return;
+        }
+
+        // Check if account is suspended
+        if (userData.status === 'suspended') {
+          setLocalError('Your account has been suspended. Please contact administrator.');
+          await auth.signOut();
+          setLoading(false);
+          return;
+        }
+
+        // Check if account is inactive
+        if (userData.status === 'inactive') {
+          setLocalError('Your account is inactive. Please contact administrator.');
           await auth.signOut();
           setLoading(false);
           return;
@@ -257,6 +275,15 @@ const LoginPage: React.FC = () => {
                 {error && (
                   <Alert severity="error" sx={{ mb: 3 }} onClose={() => setLocalError(null)}>
                     {error}
+                  </Alert>
+                )}
+
+                {/* Info for new sellers */}
+                {selectedRole === 'seller' && !error && (
+                  <Alert severity="info" sx={{ mb: 3 }}>
+                    <Typography variant="body2">
+                      <strong>New seller?</strong> Your account must be approved by an administrator before you can login.
+                    </Typography>
                   </Alert>
                 )}
 
