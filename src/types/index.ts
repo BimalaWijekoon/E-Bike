@@ -25,11 +25,20 @@ export interface AuthState {
 }
 
 // Bike Types
+export type VehicleCategory = 
+  | 'luxury-vehicle' 
+  | 'national-standard-q' 
+  | 'electric-motorcycle' 
+  | 'special-offer' 
+  | 'electric-bicycle' 
+  | 'tianjin-tricycle' 
+  | 'scooter';
 export type BikeCategory = 'mountain' | 'road' | 'city' | 'hybrid' | 'electric' | 'folding';
 export type BikeStatus = 'active' | 'inactive' | 'out_of_stock';
 
 export interface Bike {
   id: string;
+  vehicleCategory: VehicleCategory;
   name: string;
   brand: string;
   model: string;

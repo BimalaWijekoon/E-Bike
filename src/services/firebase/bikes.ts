@@ -12,7 +12,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './config';
-import type { Bike, BikeCategory, BikeStatus } from '../../types';
+import type { Bike, BikeCategory, BikeStatus, VehicleCategory } from '../../types';
 
 const COLLECTION_NAME = 'bikes';
 
@@ -21,6 +21,7 @@ const convertBike = (doc: any): Bike => {
   const data = doc.data();
   return {
     id: doc.id,
+    vehicleCategory: data.vehicleCategory || 'luxury-vehicle',
     name: data.name,
     brand: data.brand,
     model: data.model,
@@ -73,6 +74,7 @@ export const getBikeById = async (id: string): Promise<Bike | null> => {
 
 // Create new bike
 export interface CreateBikeData {
+  vehicleCategory: VehicleCategory;
   name: string;
   brand: string;
   model: string;

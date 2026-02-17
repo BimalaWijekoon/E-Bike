@@ -41,7 +41,119 @@ import {
   deleteBike,
   type CreateBikeData,
 } from '../services/firebase/bikes';
-import type { Bike, BikeCategory, BikeStatus } from '../types';
+import type { Bike, BikeCategory, BikeStatus, VehicleCategory } from '../types';
+
+const VEHICLE_CATEGORIES: { value: VehicleCategory; label: string }[] = [
+  { value: 'luxury-vehicle', label: 'Luxury Vehicle Series' },
+  { value: 'national-standard-q', label: 'National Standard Vehicle Q Series' },
+  { value: 'electric-motorcycle', label: 'Electric Motorcycle Series' },
+  { value: 'special-offer', label: 'Special Offer Series' },
+  { value: 'electric-bicycle', label: 'Electric Bicycle Series' },
+  { value: 'tianjin-tricycle', label: 'Tianjin Tricycle Model' },
+  { value: 'scooter', label: 'Scooter' },
+];
+
+const VEHICLE_NAMES: Record<VehicleCategory, string[]> = {
+  'luxury-vehicle': [
+    'PHANTOM MAX',
+    'WAICHAN',
+    'EX007 (Lithium Version)',
+    'EX007 (Lead-acid Version)',
+    'ETERNITY',
+  ],
+  'national-standard-q': [
+    'Quest Q (72V24AH – 1000W Model)',
+    'BullKing Q (72V30AH / 72V24AH Dual Battery Model)',
+    'Coco Q (60V24AH – 450W Model)',
+    'FULING Q',
+    'LUNA Q',
+    'FORTUNE Q',
+    'X-ONE Q',
+  ],
+  'electric-motorcycle': [
+    'SWEET TEA',
+    'MILK SHAKE',
+    'GRACEFULNESS',
+    'CLOUD',
+    'LINGYUE',
+    'FLORA',
+    'Q8',
+    'NOV9',
+    'FULING',
+    'MELODY',
+    'NAVIGATOR',
+    'TANTOUR',
+    'LAND BOUNDARY',
+    'VAST UNIVERSE',
+    'PATHFINDER',
+    'BLITZ',
+    'STARRY',
+    'ADVENTURE',
+    'SPARK',
+    'STAR RIVER',
+    'Crazy Battle',
+    'DAWN',
+    'DAWN II',
+    'STARSHIP',
+    'LIGHTNING',
+    'THUNDER',
+    'VICTORIA (Lithium Version)',
+    'VICTORIA (Lead-acid Version)',
+    'X-ONE DT (Lead-acid Version)',
+    'X-ONE DT (Lithium Version)',
+    'BULL KING',
+    'DAWNRAY',
+    'X-MAX',
+    'COWBOY',
+  ],
+  'special-offer': [
+    'FUMEI',
+    'LYFEI II',
+  ],
+  'electric-bicycle': [
+    'GENIUS',
+    'YOUMMY',
+    'LYFEI',
+    'YOLIGHT',
+    'YOHA 2.0',
+    'YOKUO',
+    'NY1',
+    'SHADOW',
+    'CHEETAH',
+    'ICE CREAM',
+    'BRONCO PRO',
+    'CONFIDANT',
+    'WARRIOR',
+    'Striker',
+    'YOGA Pro',
+    'FALCON',
+    'HUNTER',
+    '137',
+    'BULL',
+    'M8',
+    'EAGLE',
+  ],
+  'tianjin-tricycle': [
+    'QQ II',
+    'Q-CANDY',
+    'MINI',
+    'NIMBUS',
+    'TRICLOUD II',
+    'Q-STAR II',
+    'STARBEAN',
+    'STARMAY',
+    'STARLORD',
+    'STARPULSE II',
+    'NEBULA II',
+    'STARLORD PRO',
+    'T-REX 1.8',
+    'Vance 1.6',
+    'Drake 1.6',
+  ],
+  'scooter': [
+    'U1',
+  ],
+};
 
 const CATEGORIES: { value: BikeCategory; label: string }[] = [
   { value: 'mountain', label: 'Mountain' },
@@ -59,6 +171,7 @@ const STATUS_OPTIONS: { value: BikeStatus; label: string; color: 'success' | 'er
 ];
 
 const initialFormData: CreateBikeData = {
+  vehicleCategory: 'luxury-vehicle',
   name: '',
   brand: '',
   model: '',
@@ -109,6 +222,7 @@ const BikesPage: React.FC = () => {
     if (bike) {
       setSelectedBike(bike);
       setFormData({
+        vehicleCategory: bike.vehicleCategory,
         name: bike.name,
         brand: bike.brand,
         model: bike.model,
@@ -133,7 +247,17 @@ const BikesPage: React.FC = () => {
   };
 
   const handleInputChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (field === 'vehicleCategory') {
+      // Reset vehicle name when category changes
+      setFormData((prev) => ({ ...prev, [field]: value, name: '' }));
+    } else {
+      setFormData((prev) => ({ ...prev, [field]: value }));
+    }
+  };
+
+  // Get available vehicle names for selected category
+  const getAvailableVehicleNames = () => {
+    return VEHICLE_NAMES[formData.vehicleCategory] || [];
   };
 
   const handleSpecChange = (field: string, value: string) => {
@@ -425,14 +549,37 @@ const BikesPage: React.FC = () => {
                 Basic Information
               </Typography>
             </Grid>
+            <Grid size={12}>
+              <TextField
+                fullWidth
+                select
+                label="Vehicle Category"
+                value={formData.vehicleCategory}
+                onChange={(e) => handleInputChange('vehicleCategory', e.target.value)}
+                required
+              >
+                {VEHICLE_CATEGORIES.map((cat) => (
+                  <MenuItem key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="Bike Name"
+                select
+                label="Vehicle Name"
                 value={formData.name}
                 onChange={(e) => handleInputChange('name', e.target.value)}
                 required
-              />
+              >
+                {getAvailableVehicleNames().map((name) => (
+                  <MenuItem key={name} value={name}>
+                    {name}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
