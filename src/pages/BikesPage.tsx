@@ -21,6 +21,7 @@ import {
   Fab,
   InputAdornment,
   Divider,
+  Snackbar,
 } from '@mui/material';
 import {
   Add,
@@ -33,6 +34,8 @@ import {
   Battery90,
   DirectionsBike,
   Close,
+  CloudUpload,
+  Image as ImageIcon,
 } from '@mui/icons-material';
 import {
   getAllBikes,
@@ -41,6 +44,8 @@ import {
   deleteBike,
   type CreateBikeData,
 } from '../services/firebase/bikes';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../services/firebase/config';
 import type { Bike, BikeCategory, BikeStatus, VehicleCategory } from '../types';
 
 const VEHICLE_CATEGORIES: { value: VehicleCategory; label: string }[] = [
@@ -1065,6 +1070,7 @@ const initialFormData: CreateBikeData = {
     maxSpeed: '',
     weight: '',
   },
+  images: [],
   status: 'active',
 };
 
@@ -1077,6 +1083,10 @@ const BikesPage: React.FC = () => {
   const [selectedBike, setSelectedBike] = useState<Bike | null>(null);
   const [formData, setFormData] = useState<CreateBikeData>(initialFormData);
   const [saving, setSaving] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Fetch bikes on mount
   useEffect(() => {
@@ -1110,12 +1120,16 @@ const BikesPage: React.FC = () => {
         stock: bike.stock,
         description: bike.description,
         specifications: bike.specifications,
+        images: bike.images,
         status: bike.status,
       });
     } else {
       setSelectedBike(null);
       setFormData(initialFormData);
     }
+    setImageFile(null);
+    setImagePreview(null);
+    setError(null);
     setDialogOpen(true);
   };
 
@@ -1123,6 +1137,9 @@ const BikesPage: React.FC = () => {
     setDialogOpen(false);
     setSelectedBike(null);
     setFormData(initialFormData);
+    setImageFile(null);
+    setImagePreview(null);
+    setError(null);
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -1169,21 +1186,171 @@ const BikesPage: React.FC = () => {
     }));
   };
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Check file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        setError('Image size must be less than 5MB. Please choose a smaller image.');
+        return;
+      }
+
+      // Check file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please select a valid image file.');
+        return;
+      }
+
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const compressImage = (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          // Set max dimensions
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
+          
+          // Calculate new dimensions
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          ctx?.drawImage(img, 0, 0, width, height);
+          
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const compressedFile = new File([blob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(compressedFile);
+              } else {
+                reject(new Error('Image compression failed'));
+              }
+            },
+            'image/jpeg',
+            0.85 // 85% quality
+          );
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+    });
+  };
+
+  const uploadImage = async (file: File): Promise<string> => {
+    try {
+      // Compress image before upload
+      const compressedFile = await compressImage(file);
+      
+      const timestamp = Date.now();
+      const fileName = `bikes/${timestamp}_${file.name.replace(/\s+/g, '_')}`;
+      const storageRef = ref(storage, fileName);
+      
+      await uploadBytes(storageRef, compressedFile);
+      const downloadURL = await getDownloadURL(storageRef);
+      return downloadURL;
+    } catch (error) {
+      console.error('Upload error:', error);
+      throw new Error('Failed to upload image. Please try again.');
+    }
+  };
+
   const handleSave = async () => {
     try {
       setSaving(true);
-      if (selectedBike) {
-        await updateBike(selectedBike.id, formData);
-      } else {
-        await createBike(formData);
+      setError(null);
+      
+      let imageUrls: string[] = formData.images || [];
+      
+      // Upload image if new file is selected
+      if (imageFile) {
+        try {
+          setUploading(true);
+          const imageUrl = await uploadImage(imageFile);
+          imageUrls = [imageUrl, ...imageUrls];
+        } catch (uploadError) {
+          setError('Failed to upload image. Saving without image.');
+          console.error('Image upload error:', uploadError);
+          // Continue saving without image
+        } finally {
+          setUploading(false);
+        }
       }
+      
+      const dataToSave: CreateBikeData = {
+        vehicleCategory: formData.vehicleCategory,
+        name: formData.name,
+        brand: formData.brand,
+        model: formData.model,
+        category: formData.category,
+        price: Number(formData.price) || 0,
+        stock: Number(formData.stock) || 0,
+        description: formData.description || '',
+        specifications: {
+          motorPower: formData.specifications.motorPower || '',
+          batteryCapacity: formData.specifications.batteryCapacity || '',
+          range: formData.specifications.range || '',
+          maxSpeed: formData.specifications.maxSpeed || '',
+          weight: formData.specifications.weight || '',
+        },
+        images: imageUrls,
+        status: formData.status || 'active',
+      };
+      
+      if (selectedBike) {
+        await updateBike(selectedBike.id, dataToSave);
+      } else {
+        await createBike(dataToSave);
+      }
+      
+      // Refresh the bikes list
       await fetchBikes();
+      
+      // Close dialog and reset
       handleCloseDialog();
-    } catch (err) {
-      setError('Failed to save bike');
-      console.error(err);
+      
+      // Show success message
+      setSuccessMessage(selectedBike ? 'Vehicle updated successfully!' : 'Vehicle added successfully!');
+      
+      // Clear any previous errors on success
+      setError(null);
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Failed to save bike. Please try again.';
+      setError(errorMessage);
+      console.error('Save error:', err);
     } finally {
       setSaving(false);
+      setUploading(false);
     }
   };
 
@@ -1279,6 +1446,42 @@ const BikesPage: React.FC = () => {
                   },
                 }}
               >
+                {/* Bike Image */}
+                {bike.images && bike.images.length > 0 ? (
+                  <Box
+                    sx={{
+                      width: '100%',
+                      height: 200,
+                      overflow: 'hidden',
+                      bgcolor: 'background.default',
+                    }}
+                  >
+                    <img
+                      src={bike.images[0]}
+                      alt={bike.name}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  </Box>
+                ) : (
+                  <Box
+                    sx={{
+                      width: '100%',
+                      height: 200,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: 'background.default',
+                      color: 'text.secondary',
+                    }}
+                  >
+                    <ImageIcon sx={{ fontSize: 64, opacity: 0.3 }} />
+                  </Box>
+                )}
+
                 {/* Bike Header */}
                 <Box
                   sx={{
@@ -1444,6 +1647,13 @@ const BikesPage: React.FC = () => {
         </DialogTitle>
 
         <DialogContent dividers>
+          {/* Error Alert */}
+          {error && (
+            <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+          
           <Grid container spacing={3}>
             {/* Basic Info */}
             <Grid size={12}>
@@ -1565,6 +1775,110 @@ const BikesPage: React.FC = () => {
               />
             </Grid>
 
+            {/* Vehicle Image Upload */}
+            <Grid size={12}>
+              <Typography variant="subtitle1" fontWeight={600} gutterBottom sx={{ mt: 2 }}>
+                Vehicle Image
+              </Typography>
+            </Grid>
+            <Grid size={12}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    startIcon={<CloudUpload />}
+                    disabled={uploading}
+                  >
+                    {uploading ? 'Uploading...' : 'Upload Image'}
+                    <input
+                      type="file"
+                      hidden
+                      accept="image/jpeg,image/png,image/jpg,image/webp"
+                      onChange={handleImageChange}
+                      disabled={uploading}
+                    />
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                    Max 5MB • JPG, PNG, WEBP
+                  </Typography>
+                </Box>
+                
+                {imagePreview && (
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      width: '100%',
+                      maxWidth: 300,
+                      border: '2px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        display: 'block',
+                      }}
+                    />
+                  </Box>
+                )}
+                
+                {!imagePreview && selectedBike?.images && selectedBike.images.length > 0 && (
+                  <Box
+                    sx={{
+                      position: 'relative',
+                      width: '100%',
+                      maxWidth: 300,
+                      border: '2px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <img
+                      src={selectedBike.images[0]}
+                      alt={selectedBike.name}
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        display: 'block',
+                      }}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      Current image
+                    </Typography>
+                  </Box>
+                )}
+                
+                {!imagePreview && !selectedBike?.images?.length && (
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '100%',
+                      maxWidth: 300,
+                      height: 200,
+                      border: '2px dashed',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      bgcolor: 'background.default',
+                    }}
+                  >
+                    <Box sx={{ textAlign: 'center', color: 'text.secondary' }}>
+                      <ImageIcon sx={{ fontSize: 48, opacity: 0.3, mb: 1 }} />
+                      <Typography variant="body2">No image selected</Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Box>
+            </Grid>
+
             {/* Specifications */}
             <Grid size={12}>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom sx={{ mt: 2 }}>
@@ -1620,15 +1934,24 @@ const BikesPage: React.FC = () => {
         </DialogContent>
 
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleCloseDialog} disabled={saving}>
+          <Button onClick={handleCloseDialog} disabled={saving || uploading}>
             Cancel
           </Button>
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={saving || !formData.name || !formData.brand || !formData.model}
+            disabled={saving || uploading || !formData.name || !formData.brand || !formData.model}
           >
-            {saving ? <CircularProgress size={24} /> : selectedBike ? 'Update' : 'Create'}
+            {uploading ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+                Uploading...
+              </>
+            ) : saving ? (
+              <CircularProgress size={24} />
+            ) : (
+              selectedBike ? 'Update' : 'Create'
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1664,6 +1987,18 @@ const BikesPage: React.FC = () => {
       >
         <Add />
       </Fab>
+
+      {/* Success Snackbar */}
+      <Snackbar
+        open={!!successMessage}
+        autoHideDuration={4000}
+        onClose={() => setSuccessMessage(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {successMessage}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
